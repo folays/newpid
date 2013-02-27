@@ -1,0 +1,43 @@
+=== WORKING
+socat -,echo=0,raw /var/run/newpid
+
+=== simple
+socat - UNIX-CONNECT:/var/run/newpid
+
+con: triple echo (local + remote pty + remote tty if /bin/cat)
+
+=== without triple echo
+socat -,icanon=0,echo=0 /var/run/newpid
+
+===
+http://www.dest-unreach.org/socat/doc/socat-ttyovertcp.txt
+# socat -,icanon=0,echo=0,min=0,ignbrk=0,brkint,isig,crlf $HOME/dev/vmodem0
+
+===
+http://stuff.mit.edu/afs/sipb/machine/penguin-lust/src/socat-1.7.1.2/EXAMPLES
+www.google.fr/url?sa=t&rct=j&q=&esrc=s&source=web&cd=4&ved=0CEIQFjAD&url=http%3A%2F%2Fstuff.mit.edu%2Fafs%2Fsipb%2Fmachine%2Fpenguin-lust%2Fsrc%2Fsocat-1.7.1.2%2FEXAMPLES&ei=h4IuUeDTKZOIhQf2-4HIDQ&usg=AFQjCNEJDsqCmf4s8JtjT9Wr7baj1uwC0w&sig2=_xfiVseQIqQpL0uuv0x1IA
+
+// poor mans 'telnetd' replacement
+# socat tcp-l:2023,reuseaddr,fork exec:/bin/login,pty,setsid,setpgid,stderr,ctty
+// and here an appropriate client:
+$ socat -,raw,echo=0 tcp:172.16.181.130:2023
+
+// create a listening unix socket
+$ rm -f /tmp/mysocket; socat UNIX-LISTEN:/tmp/mysocket -
+// from another terminal, connect to this socket
+$ socat UNIX:/tmp/mysocket -
+// then transfer data bidirectionally
+
+// make a program available on the network chrooted, unprivileged; 
+// parent process stays in / running as root
+// script path is already chrooted
+# ./socat -lm -d -d TCP-LISTEN:5555,fork EXEC:/bin/myscript,chroot=/home/sandbox,su=sandbox,pty,stderr
+// to avoid terminal problems, you might - instead of telnet - connect using
+$ socat -,icanon=0,echo=0 tcp:target:5555; reset
+
+// invoke an interactive ssh with exec
+// first example passes control chars (^C etc.) to remote server as usual
+socat -,echo=0,raw exec:'ssh server',pty,setsid,ctty
+// second example interprets control chars on local command line
+socat -,echo=0,icanon=0 exec:'ssh server',pty,setsid,ctty
+// afterwards, type "reset"!

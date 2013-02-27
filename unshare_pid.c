@@ -76,7 +76,6 @@ int do_child_stuff(int fd)
   char name[256];
 
   write(fd, "coucou\n", 7);
-
   /* sleep(3); */
   printf("OPENPTY...\n");
   pid_t pid_slave = forkpty(&amaster, NULL, NULL, NULL);
@@ -88,18 +87,14 @@ int do_child_stuff(int fd)
     {
       close(fd);
       write(1, "SLAVE\n", 6);
-      execlp("cat", "cat", NULL);
+      chdir("/root");
+      execlp("bash", "bash", NULL);
       err(1, "execlp");
     }
 
   write(fd, "coucou poll\n", 12);
 
   struct pollfd fds[2];
-
-  /* if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) < 0) */
-  /*   err(1, "fcntl error"); */
-  /* if (fcntl(amaster, F_SETFL, fcntl(amaster, F_GETFL) | O_NONBLOCK) < 0) */
-  /*   err(1, "fcntl error"); */
 
   fds[0] = (struct pollfd){.fd = fd, .events = POLLIN};
   fds[1] = (struct pollfd){.fd = amaster, .events = POLLIN};
