@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <sched.h>
 #include <signal.h>
 
+#include <getopt.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -155,7 +157,7 @@ void handler_sig_int(int sig)
   do_kill();
 }
 
-int main(int argc, char **argv)
+static void try_create(const char *name)
 {
   void *region = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_GROWSDOWN, -1, 0);
@@ -188,4 +190,46 @@ int main(int argc, char **argv)
     err(1, "waitpid");
   do_kill();
   printf("exit\n");
+}
+
+static struct option long_options[] = {
+  {"dev", required_argument, NULL, 'd'},
+  {"iosize", required_argument, NULL, 's'},
+  {"write", no_argument, NULL, 'w'},
+  {"iocount", required_argument, NULL, 'c'},
+  {"random", no_argument, NULL, 'r'},
+  {"maxsubmit", required_argument, NULL, 'b'},
+  {"maxinflight", required_argument, NULL, 'f'},
+  {NULL, 0, NULL, 0},
+};
+
+static void usage()
+{
+  printf("usage: ...\n");
+  exit(1);
+}
+
+static void try_connect(const char *name)
+{
+  char *socket;
+  int fd;
+
+  if (asprintf(&socket, "/var/run/newpid.%s", name) < 0)
+    err(1, "could not asprintf");
+  if ((fd = open(socket, O_RDWR)) < 0)
+    {
+      if (errno != ENOENT)
+	err(1, "could not open");
+    }
+  free(socket);
+}
+
+int main(int argc, char **argv)
+{
+  /* start_pid(); */
+
+  if (argc < 2)
+    usage();
+  try_connect(argv[1]);
+  try_create(argv[1]);
 }
