@@ -1,0 +1,5 @@
+=== socket file example
+http://www.thomasstover.com/uds.html
+
+=== openpty example
+http://code.google.com/p/thebends/source/browse/misc/openpty-example.c?spec=svn133&r=133
