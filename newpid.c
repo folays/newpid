@@ -10,6 +10,7 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <sys/mount.h>
@@ -103,10 +104,66 @@ int daemon_loop(int listen_fd)
     }
 }
 
+int _child_getint(int fd)
+{
+  int n;
+
+  if (read(fd, &n, sizeof(n)) < 0)
+    err(1, "read");
+  return ntohl(n);
+}
+
+unsigned char *_child_getstr(int fd, int len)
+{
+  unsigned char *s, *pos;
+
+  if (!(s = malloc(len + 1)))
+    err(1, "malloc");
+
+  pos = s;
+  while (len)
+    {
+      int nb;
+
+      nb = read(fd, pos, len);
+      if (nb < 0)
+	err(1, "read");
+      pos += nb;
+      len -= nb;
+    }
+  *pos = '\0';
+  return s;
+}
+
 int child_main(int fd)
 {
+  int tty;
+  int argc;
+  char **argv;
   int amaster;
-  char name[256];
+
+  {
+    int i;
+
+    tty = _child_getint(fd);
+    /* printf("TTY : %d\n", tty); */
+    argc = _child_getint(fd);
+    /* printf("ARGC : %d\n", argc); */
+    if (argc > 1000)
+      errx(1, "argc too many arguments... (%d)", argc);
+    if (!(argv = malloc((argc + 1) * sizeof(*argv))))
+      err(1, "malloc");
+    for (i = 0; i < argc; ++i)
+      {
+	int len = _child_getint(fd);
+	/* printf("ARGV[%d] : length %d\n", i, len); */
+	if (len > 4096)
+	  errx(1, "argument too long... (%d)", len);
+	argv[i] = _child_getstr(fd, len);
+	/* printf("ARGV[%d] : %.*s\n", i, len, argv[i]); */
+      }
+    argv[argc] = NULL;
+  }
 
   pid_t pid_slave = forkpty(&amaster, NULL, NULL, NULL);
   if (pid_slave == -1)
@@ -116,8 +173,8 @@ int child_main(int fd)
     {
       close(fd);
       chdir("/");
-      execlp("bash", "bash", NULL);
-      err(1, "execlp");
+      execvp(argv[0], argv);
+      err(1, "execvp");
     }
 
   struct pollfd fds[2];
@@ -137,7 +194,7 @@ int child_main(int fd)
 	{
 	  if (fds[i].revents & POLLIN)
 	    {
-	      char buf[255];
+	      char buf[4096];
 
 	      /* printf("POLLIN on %d\n", i); */
 	      int ret = read(fds[i].fd, buf, sizeof(buf));
@@ -256,8 +313,7 @@ static struct option long_options[] = {
   {"daemon", no_argument, NULL, 'd'},
   {"foreground", no_argument, NULL, 'f'},
   {"kill", no_argument, NULL, 'k'},
-
-  {"dev", required_argument, NULL, 'd'},
+  /* {"dev", required_argument, NULL, 'd'}, */
   {NULL, 0, NULL, 0},
 };
 
@@ -295,6 +351,14 @@ static void usage()
   exit(1);
 }
 
+static void _client_putint(int fd, int n)
+{
+  n = htonl(n);
+
+  if (write(fd, &n, sizeof(n)) < 0)
+    err(1, "write");
+}
+
 static void client_try_connect(int argc, char **argv)
 {
   int fd;
@@ -302,6 +366,41 @@ static void client_try_connect(int argc, char **argv)
 
   if ((fd = _client_get_connect_fd()) < 0)
     err(1, "could not connect to daemon");
+
+  if (flag_pty == 0)
+    {
+      if (!isatty(0))
+	flag_pty = -1;
+      else
+	{
+	  flag_pty = argc ? -1 : 1;
+	}
+    }
+
+  _client_putint(fd, flag_pty == 1 ? 1 : 0); /* put flag_tty */
+
+  if (!argc)
+    {
+      char *command = "bash";
+
+      _client_putint(fd, 1);
+      _client_putint(fd, strlen(command));
+      if (write(fd, command, strlen(command)) < 0)
+	err(1, "write");
+    }
+  else
+    {
+      int i;
+
+      _client_putint(fd, argc); /* put argc */
+      for (i = 0; i < argc; ++i)
+	{
+	  /* put (strlen, argv) tuple for each argv[] */
+	  _client_putint(fd, strlen(argv[i]));
+	  if (write(fd, argv[i], strlen(argv[i])) < 0)
+	    err(1, "write");
+	}
+    }
 
   if (asprintf(&fd_str, "FD:%d", fd) < 0)
     err(1, "asnprintf");
@@ -332,7 +431,7 @@ int main(int argc, char **argv)
   if (flag_kill)
     client_try_kill();
 
-  if (argc > 0)
+  if (!flag_daemon)
     {
       printf("TRY CONNECT\n");
       client_try_connect(argc, argv);
