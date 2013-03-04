@@ -20,12 +20,27 @@
 #define FLEX_PID 1
 #define FLEX_MNT 1
 
+static char *gl_name;
+
+static int _create_socket(struct sockaddr_un *address)
+{
+  int fd;
+
+  if ((fd = socket(PF_UNIX, SOCK_STREAM, 0)) >= 0)
+    {
+      memset(address, '\0', sizeof(*address));
+      address->sun_family = AF_UNIX;
+      snprintf(address->sun_path, sizeof(address->sun_path), "%s", gl_name);
+    }
+  return fd;
+}
+
 int child_main(void *arg)
 {
-  struct sockaddr_un address;
   int socket_fd;
-  int connection_fd;
+  struct sockaddr_un address;
   socklen_t address_length;
+  int connection_fd;
 
   printf("NEW CHILD %d\n", getpid());
 #ifdef FLEX_MNT
@@ -35,13 +50,10 @@ int child_main(void *arg)
 
   printf("SOCKET ! \n");
 
-  socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
+  unlink(gl_name);
+  if ((socket_fd = _create_socket(&address)) < 0)
+    err(1, "could not create socket");
 
-  unlink("/var/run/newpid");
-
-  memset(&address, '\0', sizeof(address));
-  address.sun_family = AF_UNIX;
-  snprintf(address.sun_path, sizeof(address.sun_path), "/var/run/newpid");
   printf("WILL2\n");
   if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) != 0)
     err(1, "bind");
@@ -49,25 +61,31 @@ int child_main(void *arg)
   if (listen(socket_fd, 5))
     err(1, "listen");
 
-  if (chmod("/var/run/newpid", 0666) < 0)
+  if (chmod(gl_name, 0666) < 0)
     err(1, "chmod");
 
   printf("accept loop\n");
 
-  while ((connection_fd = accept(socket_fd, (struct sockaddr *)&address, &address_length)) >= 0)
+  while (1)
     {
-      printf("accepted!\n");
-      int child_pid = fork();
-      if (child_pid == -1)
-	err(1, "fork");
-      if (child_pid)
+      struct sockaddr address;
+      socklen_t address_length;
+
+      while ((connection_fd = accept(socket_fd, &address, &address_length)) >= 0)
 	{
-	  close(connection_fd);
-	}
-      else
-	{
-	  close(socket_fd);
-	  do_child_stuff(connection_fd);
+	  printf("accepted!\n");
+	  int child_pid = fork();
+	  if (child_pid == -1)
+	    err(1, "fork");
+	  if (child_pid)
+	    {
+	      close(connection_fd);
+	    }
+	  else
+	    {
+	      close(socket_fd);
+	      do_child_stuff(connection_fd);
+	    }
 	}
     }
 }
@@ -89,7 +107,7 @@ int do_child_stuff(int fd)
     {
       close(fd);
       write(1, "SLAVE\n", 6);
-      chdir("/root");
+      chdir("/");
       execlp("bash", "bash", NULL);
       err(1, "execlp");
     }
@@ -157,7 +175,7 @@ void handler_sig_int(int sig)
   do_kill();
 }
 
-static void try_create(const char *name)
+static void try_create()
 {
   void *region = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_GROWSDOWN, -1, 0);
@@ -209,19 +227,29 @@ static void usage()
   exit(1);
 }
 
-static void try_connect(const char *name)
+static void try_connect()
 {
-  char *socket;
   int fd;
+  struct sockaddr_un address;
 
-  if (asprintf(&socket, "/var/run/newpid.%s", name) < 0)
-    err(1, "could not asprintf");
-  if ((fd = open(socket, O_RDWR)) < 0)
+  if ((fd = _create_socket(&address)) < 0)
+    err(1, "could not create a socket");
+
+  if (connect(fd, &address, sizeof(address)) != 0)
     {
-      if (errno != ENOENT)
-	err(1, "could not open");
+      printf("FAIL connect %s\n", gl_name);
+      if (errno != ENOENT && errno != ECONNREFUSED)
+	err(1, "could not connect %s", gl_name);
+	return;
     }
-  free(socket);
+  else
+    {
+      char *fd_str;
+
+      asprintf(&fd_str, "FD:%d", fd);
+      execlp("socat", "socat", "-,icanon=0,echo=0", fd_str, NULL);
+      err(1, "could not exec socat");
+    }
 }
 
 int main(int argc, char **argv)
@@ -230,6 +258,10 @@ int main(int argc, char **argv)
 
   if (argc < 2)
     usage();
-  try_connect(argv[1]);
-  try_create(argv[1]);
+
+  if (asprintf(&gl_name, "/var/run/newpid.%s", argv[1]) < 0)
+    err(1, "could not asprintf");
+
+  try_connect();
+  try_create();
 }
