@@ -2,4 +2,4 @@
 
 set -ex
 
-cc -o newpid unshare_pid.c -lutil
+cc -o newpid newpid.c -lutil
