@@ -433,7 +433,6 @@ int main(int argc, char **argv)
 
   if (!flag_daemon)
     {
-      printf("TRY CONNECT\n");
       client_try_connect(argc, argv);
     }
 
