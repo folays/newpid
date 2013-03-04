@@ -426,7 +426,16 @@ int main(int argc, char **argv)
   ++argv;
 
   if (flag_daemon)
-    client_try_create();
+    {
+      int fd;
+
+      if ((fd = _client_get_connect_fd()) >= 0)
+	{
+	  close(fd);
+	}
+      else
+	client_try_create();
+    }
 
   if (flag_kill)
     client_try_kill();
