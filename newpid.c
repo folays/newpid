@@ -62,6 +62,8 @@ int daemon_main(void *arg)
   if (chmod(gl_name, 0666) < 0)
     err(1, "chmod");
 
+  signal(SIGCHLD, SIG_IGN);
+
   daemon_loop(listen_fd);
 }
 
@@ -76,8 +78,6 @@ int daemon_loop(int listen_fd)
     {
       poll(fds, nfds, -1);
 
-      printf("POLL\n");
-
       if (fds[0].events & POLLIN)
 	{
 	  struct sockaddr address;
@@ -86,13 +86,12 @@ int daemon_loop(int listen_fd)
 
 	  if ((connection_fd = accept(listen_fd, &address, &address_length)) >= 0)
 	    {
-	      printf("ACCEPT RETURN %d\n", connection_fd);
 	      int child_pid = fork();
 	      if (child_pid == -1)
 		err(1, "fork");
 	      if (child_pid)
 		{
-	      close(connection_fd);
+		  close(connection_fd);
 		}
 	      else
 		{
@@ -101,12 +100,6 @@ int daemon_loop(int listen_fd)
 		}
 	    }
 	}
-      {
-	int waited;
-
-	while (waited = waitpid(-1, NULL, WNOHANG))
-	  ;
-      }
     }
 }
 
