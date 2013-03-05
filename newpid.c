@@ -24,10 +24,12 @@
 #define FLEX_MNT 1 /* do we unshare the mount namespace ? */
 
 static char *gl_name;
+static char *gl_chroot_path;
 static int flag_daemon;
 static int flag_foreground;
 static int flag_kill;
 static int flag_pty = 0; /* 1 == pty, -1 == nopty, 0 == default */
+static int flag_chroot;
 
 static int _create_socket(struct sockaddr_un *address)
 {
@@ -137,7 +139,8 @@ unsigned char *_child_getstr(int fd, int len)
 
 int child_main(int fd)
 {
-  int tty;
+  int option_tty;
+  int option_chroot;
   int argc;
   char **argv;
   int amaster;
@@ -145,8 +148,10 @@ int child_main(int fd)
   {
     int i;
 
-    tty = _child_getint(fd);
-    /* printf("TTY : %d\n", tty); */
+    option_tty = _child_getint(fd);
+    /* printf("TTY : %d\n", option_tty); */
+    option_chroot = _child_getint(fd);
+    /* printf("CHROOT : %d\n", option_chroot);
     argc = _child_getint(fd);
     /* printf("ARGC : %d\n", argc); */
     if (argc > 1000)
@@ -172,7 +177,13 @@ int child_main(int fd)
   if (pid_slave == 0)
     {
       close(fd);
-      chdir("/");
+      if (gl_chroot_path && (gl_chroot_path[0] == ':' || option_chroot))
+	{
+	  if (chroot(gl_chroot_path))
+	    err(1, "chroot");
+	}
+      if (chdir("/"))
+	err(1, "chdir");
       execvp(argv[0], argv);
       err(1, "execvp");
     }
@@ -313,7 +324,7 @@ static struct option long_options[] = {
   {"daemon", no_argument, NULL, 'd'},
   {"foreground", no_argument, NULL, 'f'},
   {"kill", no_argument, NULL, 'k'},
-  /* {"dev", required_argument, NULL, 'd'}, */
+  {"chroot", optional_argument, NULL, 'c'},
   {NULL, 0, NULL, 0},
 };
 
@@ -339,6 +350,11 @@ static int main_getopt(int argc, char **argv)
 	  break;
 	case 'T':
 	  flag_pty = -1;
+	  break;
+	case 'c':
+	  flag_chroot = 1;
+	  if (optarg)
+	    gl_chroot_path = strdup(optarg);
 	  break;
 	}
     }
@@ -378,6 +394,7 @@ static void client_try_connect(int argc, char **argv)
     }
 
   _client_putint(fd, flag_pty == 1 ? 1 : 0); /* put flag_tty */
+  _client_putint(fd, flag_chroot == 1 ? 1 : 0); /* put flag_chroot */
 
   if (!argc)
     {
