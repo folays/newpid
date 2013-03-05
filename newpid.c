@@ -141,6 +141,7 @@ int child_main(int fd)
 {
   int option_tty;
   int option_chroot;
+  struct winsize ws;
   int argc;
   char **argv;
   int amaster;
@@ -152,6 +153,8 @@ int child_main(int fd)
     /* printf("TTY : %d\n", option_tty); */
     option_chroot = _child_getint(fd);
     /* printf("CHROOT : %d\n", option_chroot); */
+    ws.ws_row = _child_getint(fd);
+    ws.ws_col = _child_getint(fd);
     argc = _child_getint(fd);
     /* printf("ARGC : %d\n", argc); */
     if (argc > 1000)
@@ -176,6 +179,7 @@ int child_main(int fd)
 
   if (pid_slave == 0)
     {
+      /* TTY slave */
       close(fd);
       if (gl_chroot_path && (gl_chroot_path[0] == ':' || option_chroot))
 	{
@@ -189,6 +193,9 @@ int child_main(int fd)
       execvp(argv[0], argv);
       err(1, "execvp");
     }
+
+  /* PTY master starting from here... */
+  ioctl(amaster, TIOCSWINSZ, &ws);
 
   struct pollfd fds[2];
   int nfds = 0;
@@ -397,6 +404,15 @@ static void client_try_connect(int argc, char **argv)
 
   _client_putint(fd, flag_pty == 1 ? 1 : 0); /* put flag_tty */
   _client_putint(fd, flag_chroot == 1 ? 1 : 0); /* put flag_chroot */
+
+  {
+    struct winsize ws;
+
+    if (ioctl(0, TIOCGWINSZ, &ws))
+      ws = (struct winsize){.ws_row = 50, .ws_col = 240}; /* sane default relative to MY environment :p */
+    _client_putint(fd, ws.ws_row);
+    _client_putint(fd, ws.ws_col);
+  }
 
   if (!argc)
     {
