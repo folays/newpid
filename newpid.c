@@ -30,6 +30,7 @@ static int flag_foreground;
 static int flag_kill;
 static int flag_pty = 0; /* 1 == pty, -1 == nopty, 0 == default */
 static int flag_chroot;
+static int flag_chroot_always;
 
 static int _create_socket(struct sockaddr_un *address)
 {
@@ -44,14 +45,30 @@ static int _create_socket(struct sockaddr_un *address)
   return fd;
 }
 
+static void _daemon_replace_proc(const char *path)
+{
+  if (umount(path) && errno != EINVAL)
+    err(1, "could not umount %s", path);
+  if (mount("none", path, "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RELATIME, NULL))
+    err(1, "could not mount %s", path);
+
+}
+
 int daemon_main(void *arg)
 {
   int listen_fd;
   struct sockaddr_un address;
 
 #ifdef FLEX_MNT
-  if (mount("none", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RELATIME, NULL))
-    err(1, "could not mount /proc");
+  _daemon_replace_proc("/proc");
+  if (gl_chroot_path)
+    {
+      char *path;
+
+      if (asprintf(&path, "%s/proc", gl_chroot_path) < 0)
+	err(1, "could not asprintf");
+      _daemon_replace_proc(path);
+    }
 #endif /* !FLEX_MNT */
 
   unlink(gl_name);
@@ -181,10 +198,8 @@ int child_main(int fd)
     {
       /* TTY slave */
       close(fd);
-      if (gl_chroot_path && (gl_chroot_path[0] == ':' || option_chroot))
+      if (gl_chroot_path && (flag_chroot_always || option_chroot))
 	{
-	  if (gl_chroot_path[0] == ':')
-	    ++gl_chroot_path;
 	  if (chroot(gl_chroot_path))
 	    err(1, "chroot");
 	}
@@ -363,7 +378,14 @@ static int main_getopt(int argc, char **argv)
 	case 'c':
 	  flag_chroot = 1;
 	  if (optarg)
-	    gl_chroot_path = strdup(optarg);
+	    {
+	      if (*optarg == ':')
+		{
+		  flag_chroot_always = 1;
+		  optarg++;
+		}
+	      gl_chroot_path = strdup(optarg);
+	    }
 	  break;
 	}
     }
