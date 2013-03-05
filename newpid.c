@@ -179,6 +179,8 @@ int child_main(int fd)
       close(fd);
       if (gl_chroot_path && (gl_chroot_path[0] == ':' || option_chroot))
 	{
+	  if (gl_chroot_path[0] == ':')
+	    ++gl_chroot_path;
 	  if (chroot(gl_chroot_path))
 	    err(1, "chroot");
 	}
