@@ -151,7 +151,7 @@ int child_main(int fd)
     option_tty = _child_getint(fd);
     /* printf("TTY : %d\n", option_tty); */
     option_chroot = _child_getint(fd);
-    /* printf("CHROOT : %d\n", option_chroot);
+    /* printf("CHROOT : %d\n", option_chroot); */
     argc = _child_getint(fd);
     /* printf("ARGC : %d\n", argc); */
     if (argc > 1000)
