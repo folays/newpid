@@ -63,6 +63,17 @@ int daemon_main(void *arg)
   int listen_fd;
   struct sockaddr_un address;
 
+  {
+    int fd_null;
+
+    if ((fd_null = open("/dev/null", O_RDWR)) < 0)
+      err(1, "could not open /dev/null");
+    dup2(fd_null, 0);
+    dup2(fd_null, 1);  
+    dup2(fd_null, 2);
+    close(fd_null);
+  }
+
 #ifdef FLEX_MNT
   _daemon_replace_proc("/proc");
   if (gl_chroot_path)
