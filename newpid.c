@@ -431,7 +431,7 @@ static void client_try_connect(int argc, char **argv)
 
   if (flag_pty == 0)
     {
-      if (!isatty(0))
+      if (!isatty(1))
 	flag_pty = -1;
       else
 	{
@@ -477,7 +477,7 @@ static void client_try_connect(int argc, char **argv)
   if (asprintf(&fd_str, "FD:%d", fd) < 0)
     err(1, "asnprintf");
 
-  if (isatty(0))
+  if (isatty(1))
     execlp("socat", "socat", "-,echo=0,raw", fd_str, NULL);
   else
     execlp("socat", "socat", "-", fd_str, NULL);
