@@ -1,0 +1,37 @@
+newpid implements the userland interface to PID namespaces on Linux
+
+It:
+- unshare the PID namespace
+- unshare the mount namespace (so that it can remount /proc, needed by "ps" and co...)
+- start a daemon so that you can further connect to it as many times you wish (like "screen")
+- implement pty/tty so that you can run a text editor
+
+CAVEATS:
+- there is no protocol besides the initial connection, so once you got a shell inside the instance,
+  "window resizes" won't be transmitted to the tty slave
+- I didn't bothered to implement a terminal client, so for client-side, newpid forks a "socat" instance
+  (which will handle terminal non-canonical mode/raw for us)
+
+==== LAUCH a daemon
+
+newpid --daemon jail
+newpid --daemon --chroot=/image/ jail
+newpid --daemon --chroot=:/image/ jail
+
+(the ":" in front of the --chroot path here denotes to always chroot no matter if the client used the --chroot flag)
+
+==== KILL a daemon
+
+newpid --kill jail
+
+==== RUN something
+
+newpid jail -- ps auxf
+newpid jail -- ls -laF /
+
+# HERE --chroot will make you chroot if the daemon was invoked with --chroot=/path/to/somewhere/
+#  if the --chroot path of the daemon was preprended with a ":", you will always be chrooted so the --chroot flag in
+# the client is somewhat virtually useless in this case
+newpid jail --chroot -- ls -laF /
+
+newpid jail kill -9 -1

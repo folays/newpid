@@ -47,7 +47,11 @@ static int _create_socket(struct sockaddr_un *address)
 
 static void _daemon_replace_proc(const char *path)
 {
-  if (umount(path) && errno != EINVAL)
+  /* XXX: umount() of the old proc path doesn't always works, because sometimes
+   * there is multiple filesystems mounted below /proc... like this one:
+   * - binfmt_misc on /proc/sys/fs/binfmt_misc type binfmt_misc (rw,noexec,nosuid,nodev)
+   */
+  if (umount(path) && !(errno == EINVAL || errno == EBUSY))
     err(1, "could not umount %s", path);
   if (mount("none", path, "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RELATIME, NULL))
     err(1, "could not mount %s", path);
