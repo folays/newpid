@@ -477,7 +477,10 @@ static void client_try_connect(int argc, char **argv)
   if (asprintf(&fd_str, "FD:%d", fd) < 0)
     err(1, "asnprintf");
 
-  execlp("socat", "socat", "-,echo=0,raw", fd_str, NULL);
+  if (isatty(0))
+    execlp("socat", "socat", "-,echo=0,raw", fd_str, NULL);
+  else
+    execlp("socat", "socat", "-", fd_str, NULL);
   err(1, "could not exec socat");
 }
 
