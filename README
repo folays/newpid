@@ -20,11 +20,16 @@ newpid --daemon --chroot=:/image/ jail
 
 (the ":" in front of the --chroot path here denotes to always chroot no matter if the client used the --chroot flag)
 
+newpid --daemon --nproc=32 jail
+
 ==== KILL a daemon
 
 newpid --kill jail
 
 ==== RUN something
+
+# open a terminal
+newpid jail
 
 newpid jail -- ps auxf
 newpid jail -- ls -laF /
