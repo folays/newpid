@@ -14,6 +14,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <sys/mount.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <pty.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -31,6 +33,7 @@ static int flag_kill;
 static int flag_pty = 0; /* 1 == pty, -1 == nopty, 0 == default */
 static int flag_chroot;
 static int flag_chroot_always;
+static int gl_rlimit_nproc;
 
 static int _create_socket(struct sockaddr_un *address)
 {
@@ -85,6 +88,13 @@ int daemon_main(void *arg)
       _daemon_replace_proc(path);
     }
 #endif /* !FLEX_MNT */
+
+  if (gl_rlimit_nproc)
+  {
+    struct rlimit rlim = {.rlim_cur = gl_rlimit_nproc, .rlim_max = gl_rlimit_nproc};
+
+    setrlimit(RLIMIT_NPROC, &rlim);
+  }
 
   unlink(gl_name);
   if ((listen_fd = _create_socket(&address)) < 0)
@@ -364,6 +374,7 @@ static struct option long_options[] = {
   {"foreground", no_argument, NULL, 'f'},
   {"kill", no_argument, NULL, 'k'},
   {"chroot", optional_argument, NULL, 'c'},
+  {"nproc", required_argument, NULL, 'n'},
   {NULL, 0, NULL, 0},
 };
 
@@ -402,6 +413,8 @@ static int main_getopt(int argc, char **argv)
 	      gl_chroot_path = strdup(optarg);
 	    }
 	  break;
+	case 'n':
+	  gl_rlimit_nproc = atoi(optarg);
 	}
     }
   return 0;
