@@ -34,6 +34,7 @@ static int flag_pty = 0; /* 1 == pty, -1 == nopty, 0 == default */
 static int flag_chroot;
 static int flag_chroot_always;
 static int gl_rlimit_nproc;
+static int gl_rlimit_cpu;
 
 static int _create_socket(struct sockaddr_un *address)
 {
@@ -94,6 +95,12 @@ int daemon_main(void *arg)
     struct rlimit rlim = {.rlim_cur = gl_rlimit_nproc, .rlim_max = gl_rlimit_nproc};
 
     setrlimit(RLIMIT_NPROC, &rlim);
+  }
+  if (gl_rlimit_cpu)
+  {
+    struct rlimit rlim = {.rlim_cur = gl_rlimit_cpu, .rlim_max = gl_rlimit_cpu};
+
+    setrlimit(RLIMIT_CPU, &rlim);
   }
 
   unlink(gl_name);
@@ -375,6 +382,7 @@ static struct option long_options[] = {
   {"kill", no_argument, NULL, 'k'},
   {"chroot", optional_argument, NULL, 'c'},
   {"nproc", required_argument, NULL, 'n'},
+  {"cpu", required_argument, NULL, 'm'},
   {NULL, 0, NULL, 0},
 };
 
@@ -415,6 +423,10 @@ static int main_getopt(int argc, char **argv)
 	  break;
 	case 'n':
 	  gl_rlimit_nproc = atoi(optarg);
+	  break;
+	case 'm':
+	  gl_rlimit_cpu = atoi(optarg);
+	  break;
 	}
     }
   return 0;
